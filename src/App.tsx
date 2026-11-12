@@ -144,25 +144,34 @@ function matchesSearch(row: Record<string, unknown>, search: string) {
 }
 
 function FilteredTable<T extends Record<string, unknown>>({
-  rows, columns, siteKey, typeKey, filename,
+  rows, columns, siteKey, typeKey, filename, ownerKey, failureKey, typeLabel = 'device types',
 }: {
   rows: T[]; columns: Array<Column<T>>; siteKey: keyof T & string; typeKey: keyof T & string; filename: string
+  ownerKey?: keyof T & string; failureKey?: keyof T & string; typeLabel?: string
 }) {
   const [search, setSearch] = useState('')
   const [site, setSite] = useState('')
   const [type, setType] = useState('')
+  const [owner, setOwner] = useState('')
+  const [failure, setFailure] = useState('')
   const sites = useMemo(() => [...new Set(rows.map((row) => display(row[siteKey])).filter((value) => value !== '—'))].sort(), [rows, siteKey])
   const types = useMemo(() => [...new Set(rows.map((row) => display(row[typeKey])).filter((value) => value !== '—'))].sort(), [rows, typeKey])
+  const owners = useMemo(() => ownerKey ? [...new Set(rows.map((row) => display(row[ownerKey])).filter((value) => value !== '—'))].sort() : [], [ownerKey, rows])
+  const failures = useMemo(() => failureKey ? [...new Set(rows.flatMap((row) => String(row[failureKey] ?? '').split(';').map((value) => value.trim()).filter(Boolean)))].sort() : [], [failureKey, rows])
   const filtered = useMemo(() => rows.filter((row) =>
     (!site || display(row[siteKey]) === site) &&
     (!type || display(row[typeKey]) === type) &&
-    matchesSearch(row, search)), [rows, search, site, siteKey, type, typeKey])
+    (!owner || !ownerKey || display(row[ownerKey]) === owner) &&
+    (!failure || !failureKey || String(row[failureKey] ?? '').split(';').map((value) => value.trim()).includes(failure)) &&
+    matchesSearch(row, search)), [failure, failureKey, owner, ownerKey, rows, search, site, siteKey, type, typeKey])
   return (
     <section className="panel">
       <div className="filters">
         <label className="search"><Search size={17} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search hostname, serial, model, asset tag…" /></label>
         <select value={site} onChange={(event) => setSite(event.target.value)}><option value="">All sites</option>{sites.map((value) => <option key={value}>{value}</option>)}</select>
-        <select value={type} onChange={(event) => setType(event.target.value)}><option value="">All device types</option>{types.map((value) => <option key={value}>{value}</option>)}</select>
+        {ownerKey && <select value={owner} onChange={(event) => setOwner(event.target.value)}><option value="">All task owners</option>{owners.map((value) => <option key={value}>{value}</option>)}</select>}
+        <select value={type} onChange={(event) => setType(event.target.value)}><option value="">All {typeLabel}</option>{types.map((value) => <option key={value}>{value}</option>)}</select>
+        {failureKey && <select value={failure} onChange={(event) => setFailure(event.target.value)}><option value="">All failed controls</option>{failures.map((value) => <option key={value}>{value}</option>)}</select>}
         <button className="secondary" type="button" onClick={() => exportCsv(filename, filtered)}><Download size={16} /> Export filtered CSV</button>
       </div>
       <DataTable rows={filtered} columns={columns} />
@@ -178,6 +187,21 @@ function Overview({ core, navigate }: { core: CoreData; navigate: (page: Page) =
     'Remaining clients': site.remainingToInstall,
     Servers: site.serverInstalls,
   }))
+  const taskBreakdown = core.sites.map((site) => {
+    const tasks = core.taskProgramme.tasks.filter((task) => task.site === site.site)
+    return {
+      site: site.site,
+      installOwner: core.taskProgramme.rolloutOwners[site.site] ?? core.taskProgramme.owner,
+      dueDate: core.taskProgramme.schoolSchedule.find((item) => item.site === site.site)?.dueDate ?? '',
+      remainingDevices: site.remainingToInstall,
+      installationTasks: tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).length,
+      complianceTasks: tasks.filter((task) => task.category === 'Compliance remediation').length,
+      inventoryTasks: tasks.filter((task) => task.category === 'Inventory reconciliation').length,
+      serverTasks: tasks.filter((task) => task.category === 'Server CyberSmart').length,
+      mfaTasks: tasks.filter((task) => task.category === 'MFA').length,
+      totalTasks: tasks.length,
+    }
+  })
   return (
     <>
       <Header title="Trust-wide inventory and coverage" description="All reporting starts with the authoritative compatible client-compute estate, then reconciles CyberSmart installation, serial matching, compliance and remaining rollout." />
@@ -223,6 +247,22 @@ function Overview({ core, navigate }: { core: CoreData; navigate: (page: Page) =
           <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.sites.length)}</strong><span>School completion plans</span></button><ChevronRight />
           <button onClick={() => navigate('programme')}><strong>31 Jul 2027</strong><span>Final completion deadline</span></button>
         </div>
+      </section>
+      <section className="panel">
+        <h2>School task types, owners and deadlines</h2>
+        <p>Dashboard breakdown of the delivery workload for every school. Installation tasks are split by remaining device type.</p>
+        <div className="filters">
+          <button className="secondary" type="button" onClick={() => exportCsv('school-task-type-owner-breakdown.csv', taskBreakdown)}>
+            <Download size={16} /> Export school task matrix
+          </button>
+        </div>
+        <DataTable rows={taskBreakdown} columns={[
+          { key: 'site', label: 'School' }, { key: 'installOwner', label: 'Remaining-install owner' },
+          { key: 'dueDate', label: 'Deadline' }, { key: 'remainingDevices', label: 'Remaining devices' },
+          { key: 'installationTasks', label: 'Device-type install tasks' }, { key: 'complianceTasks', label: 'Compliance tasks' },
+          { key: 'inventoryTasks', label: 'Inventory tasks' }, { key: 'serverTasks', label: 'Server tasks' },
+          { key: 'mfaTasks', label: 'MFA tasks' }, { key: 'totalTasks', label: 'Total tasks' },
+        ]} />
       </section>
       <div className="two-column">
         <section className="panel">
@@ -373,12 +413,13 @@ function SiteExplorer({
 }
 
 function BrowserPage<T extends Record<string, unknown>>({
-  title, description, rows, columns, siteKey, typeKey, filename, metrics,
+  title, description, rows, columns, siteKey, typeKey, filename, metrics, ownerKey, failureKey, typeLabel,
 }: {
   title: string; description: string; rows: T[]; columns: Array<Column<T>>;
   siteKey: keyof T & string; typeKey: keyof T & string; filename: string; metrics?: ReactNode
+  ownerKey?: keyof T & string; failureKey?: keyof T & string; typeLabel?: string
 }) {
-  return <><Header title={title} description={description} />{metrics}<FilteredTable rows={rows} columns={columns} siteKey={siteKey} typeKey={typeKey} filename={filename} /></>
+  return <><Header title={title} description={description} />{metrics}<FilteredTable rows={rows} columns={columns} siteKey={siteKey} typeKey={typeKey} filename={filename} ownerKey={ownerKey} failureKey={failureKey} typeLabel={typeLabel} /></>
 }
 
 type AssignedFailure = FailingRow & {
@@ -406,6 +447,7 @@ function Failures({ rows, core }: { rows: FailingRow[]; core: CoreData }) {
       title="Failures & remediation allocation"
       description="Locate the exact failing device, review its controls and assign remediation locally in this browser without modifying source evidence."
       rows={assigned} siteKey="schoolSite" typeKey="deviceType" filename="cybersmart-failures-and-remediation.csv"
+      ownerKey="owner" failureKey="failedChecks"
       metrics={<div className="metrics compact">
         <Metric label="Failing school devices" value={rows.length} tone="red" />
         <Metric label="Assigned to an owner" value={Object.values(remediation).filter((item) => item.owner).length} />
@@ -429,6 +471,23 @@ function Programme({ core }: { core: CoreData }) {
   const central = tasks.filter((task) => task.site === 'WeST Central')
   const mfa = tasks.filter((task) => task.category === 'MFA')
   const byod = tasks.filter((task) => task.category === 'BYOD')
+  const rollout = tasks
+    .filter((task) => task.category.startsWith('CyberSmart rollout'))
+    .sort((a, b) => {
+      const aDelegated = a.owner === core.taskProgramme.owner ? 1 : 0
+      const bDelegated = b.owner === core.taskProgramme.owner ? 1 : 0
+      return aDelegated - bDelegated || a.owner.localeCompare(b.owner) || a.site.localeCompare(b.site)
+    })
+  const delegated = Object.entries(core.taskProgramme.rolloutOwners).map(([site, owner]) => {
+    const ownerTasks = rollout.filter((task) => task.site === site)
+    return {
+      site,
+      owner,
+      deviceTypes: ownerTasks.map((task) => task.category.replace('CyberSmart rollout - ', '')).join(', '),
+      remainingDevices: ownerTasks.reduce((total, task) => total + Number(task.measure.match(/^\d+/)?.[0] ?? 0), 0),
+      dueDate: ownerTasks[0]?.dueDate ?? '',
+    }
+  })
   return (
     <>
       <Header title="Remediation programme" description="A single owner and deadline-led delivery plan for Central, all schools, CyberSmart remediation, server coverage, MFA and BYOD." />
@@ -441,24 +500,72 @@ function Programme({ core }: { core: CoreData }) {
         <Metric label="MFA site tasks" value={mfa.length} note="One for every school" tone="amber" />
         <Metric label="Trust-wide BYOD tasks" value={byod.length} note="Policy and technical controls" tone="amber" />
       </div>
+      <h2 className="section-title">Delegated remaining-install owners</h2>
+      <section className="panel allocation-highlight">
+        <p>These owners are responsible specifically for installing CyberSmart on the remaining compatible devices at their schools. Mark Kent owns all other schools and all non-installation work.</p>
+        <DataTable rows={delegated} columns={[
+          { key: 'owner', label: 'Installation task owner' }, { key: 'site', label: 'School' },
+          { key: 'deviceTypes', label: 'Assigned device types' }, { key: 'remainingDevices', label: 'Remaining devices' },
+          { key: 'dueDate', label: 'All installation tasks due' },
+        ]} />
+      </section>
       <h2 className="section-title">School completion schedule</h2>
       <section className="panel">
         <DataTable rows={core.taskProgramme.schoolSchedule.map((item) => ({
           ...item,
-          programmeOwner: core.taskProgramme.owner,
           installOwner: core.taskProgramme.rolloutOwners[item.site] ?? core.taskProgramme.owner,
+          remainingDevices: core.sites.find((site) => site.site === item.site)?.remainingToInstall ?? 0,
+          installTaskCount: rollout.filter((task) => task.site === item.site).length,
           taskCount: tasks.filter((task) => task.site === item.site).length,
         }))} columns={[
-          { key: 'site', label: 'School' }, { key: 'programmeOwner', label: 'Programme owner' }, { key: 'installOwner', label: 'Remaining-install owner' }, { key: 'dueDate', label: 'All tasks due' }, { key: 'taskCount', label: 'Tasks' },
+          { key: 'site', label: 'School' }, { key: 'installOwner', label: 'Remaining-install owner' },
+          { key: 'remainingDevices', label: 'Remaining devices' }, { key: 'installTaskCount', label: 'Device-type install tasks' },
+          { key: 'dueDate', label: 'All tasks due' }, { key: 'taskCount', label: 'Total tasks' },
         ]} />
       </section>
+      <h2 className="section-title">Remaining CyberSmart installation tasks</h2>
+      <FilteredTable<ProgrammeTask> rows={rollout} siteKey="site" typeKey="category" ownerKey="owner" typeLabel="device types" filename="remaining-cybersmart-installation-tasks.csv" columns={[
+        { key: 'owner', label: 'Task owner' }, { key: 'site', label: 'School' }, { key: 'category', label: 'Device type' },
+        { key: 'task', label: 'Installation task' }, { key: 'measure', label: 'Remaining quantity' },
+        { key: 'dueDate', label: 'Due date' }, { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
+      ]} />
       <h2 className="section-title">All programme tasks</h2>
-      <FilteredTable<ProgrammeTask> rows={tasks} siteKey="site" typeKey="category" filename="cybersmart-remediation-programme.csv" columns={[
+      <FilteredTable<ProgrammeTask> rows={tasks} siteKey="site" typeKey="category" ownerKey="owner" typeLabel="task types" filename="cybersmart-remediation-programme.csv" columns={[
         { key: 'scope', label: 'Scope' }, { key: 'site', label: 'Site' }, { key: 'category', label: 'Category' },
         { key: 'task', label: 'Task' }, { key: 'measure', label: 'Completion measure' }, { key: 'owner', label: 'Owner' },
         { key: 'dueDate', label: 'Due date' }, { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
       ]} />
     </>
+  )
+}
+
+type AssignedRemaining = RemainingRow & { taskOwner: string; dueDate: string }
+
+function RemainingPage({ rows, core }: { rows: RemainingRow[]; core: CoreData }) {
+  const assigned: AssignedRemaining[] = rows.map((row) => ({
+    ...row,
+    taskOwner: core.taskProgramme.rolloutOwners[row.schoolSite] ?? core.taskProgramme.owner,
+    dueDate: core.taskProgramme.schoolSchedule.find((item) => item.site === row.schoolSite)?.dueDate ?? core.taskProgramme.schoolCompletionDeadline,
+  }))
+  return (
+    <BrowserPage
+      title="Remaining installation allocation"
+      description="Every provisional remaining compatible-device allocation now includes its responsible task owner and school completion deadline."
+      rows={assigned} siteKey="schoolSite" typeKey="deviceType" filename="remaining-cybersmart-installations-with-owners.csv"
+      ownerKey="taskOwner"
+      metrics={<div className="metrics compact">
+        <Metric label="Remaining client devices" value={core.summary.remainingToInstall} tone="red" />
+        <Metric label="Device-type installation tasks" value={core.taskProgramme.tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).length} tone="amber" />
+        <Metric label="Installation task owners" value={new Set(core.taskProgramme.tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).map((task) => task.owner)).size} />
+      </div>}
+      columns={[
+        { key: 'taskOwner', label: 'Task owner' }, { key: 'dueDate', label: 'School deadline' },
+        { key: 'schoolSite', label: 'Site' }, { key: 'deviceCategory', label: 'Inventory category' }, { key: 'deviceType', label: 'Type' },
+        { key: 'allocateQuantity', label: 'Allocate' }, { key: 'serial', label: 'Serial' }, { key: 'assetTag', label: 'Asset tag' },
+        { key: 'operatingSystem', label: 'Operating system' }, { key: 'manufacturer', label: 'Manufacturer' }, { key: 'model', label: 'Model' },
+        { key: 'location', label: 'Location' }, { key: 'evidenceConfidence', label: 'Evidence confidence' },
+      ]}
+    />
   )
 }
 
@@ -577,12 +684,7 @@ function App() {
     { key: 'os', label: 'Operating system' }, { key: 'matchMethod', label: 'Inventory match' }, { key: 'failedChecks', label: 'Failed controls' },
   ]} /> : <Loader error={installed.error} />
   else if (page === 'failures') content = failing.data ? <Failures rows={failing.data} core={core.data} /> : <Loader error={failing.error} />
-  else if (page === 'remaining') content = remaining.data ? <BrowserPage title="Remaining installation allocation" description="Provisional inventory-first list of client devices still requiring CyberSmart. Quantity-only records must be identified locally." rows={remaining.data} siteKey="schoolSite" typeKey="deviceType" filename="remaining-cybersmart-installations.csv" columns={[
-    { key: 'schoolSite', label: 'Site' }, { key: 'deviceCategory', label: 'Inventory category' }, { key: 'deviceType', label: 'Type' },
-    { key: 'allocateQuantity', label: 'Allocate' }, { key: 'serial', label: 'Serial' }, { key: 'assetTag', label: 'Asset tag' },
-    { key: 'operatingSystem', label: 'Operating system' }, { key: 'manufacturer', label: 'Manufacturer' }, { key: 'model', label: 'Model' },
-    { key: 'location', label: 'Location' }, { key: 'evidenceConfidence', label: 'Evidence confidence' },
-  ]} /> : <Loader error={remaining.error} />
+  else if (page === 'remaining') content = remaining.data ? <RemainingPage rows={remaining.data} core={core.data} /> : <Loader error={remaining.error} />
   else if (page === 'servers') content = servers.data ? <ServerPage data={servers.data} /> : <Loader error={servers.error} />
   else if (page === 'checks') content = <Checks rows={core.data.checks} />
   else content = <Guide core={core.data} />

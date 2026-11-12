@@ -68,6 +68,8 @@ details summary { color: #10233f; font-weight: 750; cursor: pointer; padding: 3p
 .guide-grid .panel { position: relative; padding-top: 64px; }
 .step { position: absolute; top: 20px; left: 22px; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: #2878ff; color: white; font-weight: 800; }
 .public-warning { display: flex; gap: 14px; background: #fff7e8; color: #9a5b05; }
+.allocation-highlight { border-color: #9fc2ff; background: linear-gradient(135deg, #f8fbff 0%, #eef4ff 100%); }
+.allocation-highlight > p { margin-bottom: 18px; color: #315784; font-weight: 650; }
 .startup { min-height: 100vh; display: grid; place-content: center; text-align: center; color: #2878ff; }
 .startup h1 { color: #10233f; font-size: 28px; }
 @media (max-width: 1280px) { .metrics { grid-template-columns: repeat(3, 1fr); }.two-column { grid-template-columns: 1fr; } }

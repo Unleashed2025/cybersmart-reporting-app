@@ -362,6 +362,33 @@ for (let index = 0; index < summaryRows.length; index += 11) {
   )
 }
 
+// School task matrix
+const taskMatrixRows = core.sites.map((site) => {
+  const tasks = core.taskProgramme.tasks.filter((task) => task.site === site.site)
+  const schedule = core.taskProgramme.schoolSchedule.find((item) => item.site === site.site)
+  return [
+    shortSite(site.site),
+    core.taskProgramme.rolloutOwners[site.site] ?? core.taskProgramme.owner,
+    dateLabel(schedule?.dueDate),
+    site.remainingToInstall,
+    tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).length,
+    tasks.filter((task) => task.category === 'Compliance remediation').length,
+    tasks.filter((task) => task.category === 'Inventory reconciliation').length,
+    tasks.filter((task) => task.category === 'Server CyberSmart').length,
+    tasks.filter((task) => task.category === 'MFA').length,
+    tasks.length,
+  ]
+})
+for (let index = 0; index < taskMatrixRows.length; index += 11) {
+  const slide = nextSlide()
+  addHeader(slide, 'Delivery management', `School task types, owners and deadlines · ${Math.floor(index / 11) + 1} of ${Math.ceil(taskMatrixRows.length / 11)}`, 'Installation work is split by device type; compliance, inventory, server and MFA tasks are shown separately.')
+  addTable(slide,
+    ['School', 'Install owner', 'Deadline', 'Remaining\ndevices', 'Device-type\ninstall tasks', 'Compliance', 'Inventory', 'Server', 'MFA', 'Total\ntasks'],
+    taskMatrixRows.slice(index, index + 11),
+    { y: 1.68, h: 4.95, fontSize: 6.2 },
+  )
+}
+
 // Site detail slides
 for (const site of core.sites) {
   const slide = nextSlide()
