@@ -274,6 +274,26 @@ function shortSite(value) {
 }
 
 // Client coverage across sites
+{
+  const slide = nextSlide()
+  const central = core.centralReport
+  addHeader(slide, 'Associated site evidence', 'WeST Central CyberSmart report', 'Shown with Morley Meadow because the operations are connected. Central has no independent audit inventory, so this is agent evidence rather than measured coverage.')
+  addMetric(slide, 0.55, 1.72, 2.35, nf.format(central.totalAgents), 'CENTRAL CYBERSMART AGENTS', 'Detailed exported agent records', C.blue)
+  addMetric(slide, 3.02, 1.72, 2.35, nf.format(central.passingAgents), 'PASSING AGENTS', 'All assessed controls pass', C.green)
+  addMetric(slide, 5.49, 1.72, 2.35, nf.format(central.failingAgents), 'FAILING AGENTS', 'Control remediation required', C.red)
+  addMetric(slide, 7.96, 1.72, 2.35, nf.format(central.serialRecorded), 'SERIAL RECORDED', 'Identifier present in CyberSmart', C.amber)
+  addMetric(slide, 10.43, 1.72, 2.35, nf.format(central.matchedToMorley), 'MATCHED TO MORLEY', `${central.morleyInventoryRecords} Morley records checked`, central.matchedToMorley ? C.green : C.amber)
+  addSectionLabel(slide, 'Central device types', 0.65, 3.2)
+  addBars(slide, Object.entries(central.deviceTypes).map(([label, value]) => ({ label, value, color: C.blue })), { x: 0.65, y: 3.45, w: 5.65, h: 2.25, maxItems: 8 })
+  addSectionLabel(slide, 'Central failed controls', 6.7, 3.2)
+  addBars(slide, Object.entries(central.failedControls).map(([label, value]) => ({ label, value, color: C.red })), { x: 6.7, y: 3.45, w: 5.95, h: 2.25, maxItems: 8 })
+  addCard(slide, 0.65, 5.93, 12, 0.66, C.amber, C.white)
+  slide.addText(`Morley reconciliation result: ${central.matchedToMorley} of ${central.totalAgents} Central agents matched Morley Meadow inventory by serial, asset tag or hostname evidence. Central agents remain separate and do not reduce Morley’s installation gap.`, {
+    x: 0.92, y: 6.12, w: 11.45, h: 0.24, fontSize: 8.3, bold: true, color: C.navy, margin: 0, fit: 'shrink',
+  })
+}
+
+// Client coverage across sites
 for (const [part, sites] of [[1, core.sites.slice(0, 16)], [2, core.sites.slice(16)]]) {
   const slide = nextSlide()
   addHeader(slide, 'Multisite client coverage', `Compatible devices and remaining installations · ${part} of 2`, 'The blue bar shows the compatible client estate; the amber bar shows the remaining CyberSmart installation allocation.')

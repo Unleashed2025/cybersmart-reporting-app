@@ -72,6 +72,21 @@ export interface CoreData {
   methodology: Array<Record<string, unknown>>
   serverSummary: ServerSummary
   serverSites: ServerSiteSummary[]
+  centralReport: {
+    reportSite: string
+    associatedSite: string
+    inventoryAvailable: boolean
+    totalAgents: number
+    passingAgents: number
+    failingAgents: number
+    serialRecorded: number
+    morleyInventoryRecords: number
+    morleyInventoryQuantity: number
+    matchedToMorley: number
+    unmatchedToMorley: number
+    deviceTypes: Record<string, number>
+    failedControls: Record<string, number>
+  }
   clientCompute: {
     records: number
     quantity: number
@@ -132,6 +147,34 @@ export interface InstalledRow extends Record<string, unknown> {
   failedChecks: string
   matchMethod: string
   cyberSmartDeviceId: string
+}
+
+export interface CyberDeviceRow extends Record<string, unknown> {
+  reportSite: string
+  additionalReportSites: string
+  host: string
+  deviceId: string
+  serial: string
+  deviceType: string
+  osName: string
+  osVersion: string
+  osRelease: string
+  appVersion: string
+  overallStatus: string
+  checks: number
+  passChecks: number
+  failChecks: number
+  unknownChecks: number
+  failedChecks: string
+  failureReasons: string
+  lastCheckIn: string
+  matchMethod: string
+  morleyInventoryMatch: string
+  morleyMatchMethod: string
+  morleyInventoryCategory: string
+  morleyInventorySerial: string
+  morleyAssetTag: string
+  morleyInventoryModel: string
 }
 
 export interface FailingRow extends Record<string, unknown> {

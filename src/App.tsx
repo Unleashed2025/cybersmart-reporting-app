@@ -10,7 +10,7 @@ import {
 } from 'recharts'
 import './App.css'
 import type {
-  CheckRow, CoreData, FailingRow, InstalledRow, InventoryRow, Page, Remediation,
+  CheckRow, CoreData, CyberDeviceRow, FailingRow, InstalledRow, InventoryRow, Page, Remediation,
   ProgrammeTask, RemainingRow, ServerData, ServerInventory, ServerMatch,
 } from './types'
 
@@ -494,9 +494,10 @@ function Overview({ core, navigate }: { core: CoreData; navigate: (page: Page) =
 }
 
 function SiteExplorer({
-  core, installed, failing, remaining, servers,
+  core, installed, failing, remaining, servers, centralDevices,
 }: {
   core: CoreData; installed: InstalledRow[] | null; failing: FailingRow[] | null; remaining: RemainingRow[] | null; servers: ServerData | null
+  centralDevices: CyberDeviceRow[] | null
 }) {
   const [name, setName] = useState(core.sites[0]?.site ?? '')
   const site = core.sites.find((item) => item.site === name) ?? core.sites[0]
@@ -509,6 +510,21 @@ function SiteExplorer({
   const siteServerInstalls = servers?.matches.filter((row) => row.site === site.site) ?? []
   const siteServerSummary = core.serverSites.find((row) => row.site === site.site)
   const controls = Object.entries(site.failChecks).sort((a, b) => b[1] - a[1])
+  const showCentral = site.site === 'Morley Meadow'
+  const centralPassing = centralDevices?.filter((row) => row.overallStatus === 'Pass').length ?? 0
+  const centralFailing = centralDevices?.filter((row) => row.overallStatus === 'Fail').length ?? 0
+  const centralSerials = centralDevices?.filter((row) => Boolean(row.serial)).length ?? 0
+  const centralMorleyMatches = centralDevices?.filter((row) => row.morleyInventoryMatch === 'Matched').length ?? 0
+  const centralDeviceTypes = Object.entries((centralDevices ?? []).reduce<Record<string, number>>((result, row) => {
+    result[row.deviceType || 'Not recorded'] = (result[row.deviceType || 'Not recorded'] ?? 0) + 1
+    return result
+  }, {})).sort((a, b) => b[1] - a[1])
+  const centralFailedControls = Object.entries((centralDevices ?? []).reduce<Record<string, number>>((result, row) => {
+    for (const control of String(row.failedChecks ?? '').split(';').map((value) => value.trim()).filter(Boolean)) {
+      result[control] = (result[control] ?? 0) + 1
+    }
+    return result
+  }, {})).sort((a, b) => b[1] - a[1])
   return (
     <>
       <Header title="Complete site report" description="Every headline and evidence list for one site: total compute, matched and unmatched installations, compliance, remaining rollout, servers and failed controls." />
@@ -544,6 +560,59 @@ function SiteExplorer({
         <Metric label="Passing server agents" value={siteServerSummary?.passingInstalls ?? 0} tone="green" />
         <Metric label="Failing server agents" value={siteServerSummary?.failingInstalls ?? 0} tone="red" />
       </div>
+      {showCentral && (
+        <section className="panel associated-site-report">
+          <div className="associated-site-heading">
+            <div>
+              <p className="eyebrow">Associated CyberSmart report</p>
+              <h2>West Country Schools Trust / Central</h2>
+              <p>Central is operationally connected to Morley Meadow, so its CyberSmart evidence is shown on this page. Its agents have also been checked against Morley’s inventory. No Central audit inventory is available, therefore Central coverage percentage and remaining-install counts cannot yet be calculated.</p>
+            </div>
+            <Badge value="Evidence only — no inventory denominator" />
+          </div>
+          {!centralDevices ? <Loader /> : (
+            <>
+              <div className="highlight-grid">
+                <HighlightStat icon={<MonitorCheck size={20} />} label="CyberSmart agents" value={centralDevices.length} />
+                <HighlightStat icon={<ShieldCheck size={20} />} label="Passing agents" value={centralPassing} tone="green" />
+                <HighlightStat icon={<ShieldAlert size={20} />} label="Failing agents" value={centralFailing} tone="red" />
+                <HighlightStat icon={<Search size={20} />} label="Serial recorded" value={centralSerials} tone="amber" />
+                <HighlightStat icon={<CheckCircle2 size={20} />} label="Matched to Morley inventory" value={centralMorleyMatches} tone={centralMorleyMatches ? 'green' : 'slate'} />
+              </div>
+              <div className="notice central-match-notice">
+                <AlertTriangle size={18} />
+                <p><strong>Morley reconciliation:</strong> {formatNumber.format(centralMorleyMatches)} of {formatNumber.format(centralDevices.length)} Central agents match Morley’s {formatNumber.format(core.centralReport.morleyInventoryRecords)} inventory records by serial, asset tag or hostname evidence. Unmatched Central agents remain separate and must not reduce Morley’s remaining-install gap.</p>
+              </div>
+              <div className="two-column associated-breakdowns">
+                <section className="chart-card">
+                  <h3>Central devices by type</h3>
+                  <div className="breakdown">{centralDeviceTypes.map(([label, value]) => <div key={label}><span>{label}</span><strong>{formatNumber.format(value)}</strong></div>)}</div>
+                </section>
+                <section className="chart-card">
+                  <h3>Central failed controls</h3>
+                  <div className="breakdown">
+                    {centralFailedControls.length
+                      ? centralFailedControls.map(([label, value]) => <div key={label}><span>{label}</span><strong>{formatNumber.format(value)}</strong></div>)
+                      : <div><span>No failed controls recorded</span><strong>0</strong></div>}
+                  </div>
+                </section>
+              </div>
+              <details open>
+                <summary>All WeST Central CyberSmart devices ({formatNumber.format(centralDevices.length)})</summary>
+                <DataTable rows={centralDevices} columns={[
+                  { key: 'host', label: 'Host' }, { key: 'serial', label: 'Serial' }, { key: 'deviceType', label: 'Type' },
+                  { key: 'overallStatus', label: 'Compliance', render: (row) => <Badge value={row.overallStatus} /> },
+                  { key: 'osName', label: 'Operating system' }, { key: 'osVersion', label: 'OS version' },
+                  { key: 'failedChecks', label: 'Failed controls' }, { key: 'lastCheckIn', label: 'Last check-in' },
+                  { key: 'morleyInventoryMatch', label: 'Morley match', render: (row) => <Badge value={row.morleyInventoryMatch} /> },
+                  { key: 'morleyMatchMethod', label: 'Morley match method' }, { key: 'morleyInventoryCategory', label: 'Morley inventory category' },
+                  { key: 'morleyInventorySerial', label: 'Morley serial' }, { key: 'morleyAssetTag', label: 'Morley asset tag' },
+                ]} />
+              </details>
+            </>
+          )}
+        </section>
+      )}
       <div className="two-column">
         <section className="panel">
           <h2>Full client-compute inventory by category</h2><p>All source inventory quantities for this site, including categories outside the compatible denominator.</p>
@@ -891,6 +960,7 @@ function App() {
   const failing = useDataset<FailingRow[]>('failing-devices.json', page === 'failures' || page === 'sites')
   const remaining = useDataset<RemainingRow[]>('remaining-devices.json', page === 'remaining' || page === 'sites')
   const servers = useDataset<ServerData>('servers.json', page === 'servers' || page === 'sites')
+  const centralDevices = useDataset<CyberDeviceRow[]>('central-devices.json', page === 'sites')
   const navigate = (next: Page) => { setPage(next); setMenu(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }
 
   if (!core.data) return <main className="startup"><ShieldCheck size={42} /><h1>Loading CyberSmart reporting</h1><Loader error={core.error} /></main>
@@ -898,7 +968,7 @@ function App() {
   let content: ReactNode
   if (page === 'overview') content = <Overview core={core.data} navigate={navigate} />
   else if (page === 'programme') content = <Programme core={core.data} />
-  else if (page === 'sites') content = <SiteExplorer core={core.data} installed={installed.data} failing={failing.data} remaining={remaining.data} servers={servers.data} />
+  else if (page === 'sites') content = <SiteExplorer core={core.data} installed={installed.data} failing={failing.data} remaining={remaining.data} servers={servers.data} centralDevices={centralDevices.data} />
   else if (page === 'inventory') content = inventory.data ? <BrowserPage title="Authoritative compute inventory" description="Every client-compute record that forms the site denominator, including serialised and quantity-only evidence." guide={[
     'Each row is a source inventory record; Quantity can represent one device or a grouped quantity.',
     'Compatible type is the normalised CyberSmart delivery category used for coverage and task planning.',

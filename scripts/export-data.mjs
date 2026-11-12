@@ -149,6 +149,77 @@ function validIdentity(value) {
   return normalized && !['NA', 'NONE', 'UNKNOWN', 'NOTRECORDED'].includes(normalized)
 }
 
+function buildCentralReport(centralDevices, inventory) {
+  const morleyInventory = inventory.filter((row) => row.school === 'Morley Meadow')
+  const serialIndex = new Map()
+  const assetIndex = new Map()
+  for (const row of morleyInventory) {
+    if (validIdentity(row.serialNumber)) serialIndex.set(identity(row.serialNumber), row)
+    if (validIdentity(row.assetTag)) assetIndex.set(identity(row.assetTag), row)
+  }
+
+  const devices = centralDevices.map((device) => {
+    const serialKey = validIdentity(device.serial) ? identity(device.serial) : ''
+    const hostKey = identity(device.host)
+    let match = serialKey ? serialIndex.get(serialKey) : undefined
+    let method = match ? 'Exact serial to Morley inventory' : ''
+    if (!match && serialKey) {
+      match = assetIndex.get(serialKey)
+      if (match) method = 'CyberSmart serial to Morley asset tag'
+    }
+    if (!match) {
+      match = morleyInventory.find((row) =>
+        [row.serialNumber, row.assetTag].some((value) => {
+          const key = identity(value)
+          return key.length >= 5 && hostKey.includes(key)
+        }))
+      if (match) method = 'CyberSmart hostname contains Morley identifier'
+    }
+    return {
+      ...device,
+      morleyInventoryMatch: match ? 'Matched' : 'No match',
+      morleyMatchMethod: method || 'No Morley inventory match',
+      morleyInventoryCategory: match?.deviceCategory ?? '',
+      morleyInventorySerial: match?.serialNumber ?? '',
+      morleyAssetTag: match?.assetTag ?? '',
+      morleyInventoryModel: match?.model ?? '',
+    }
+  })
+
+  const group = (key) => Object.fromEntries(
+    Object.entries(devices.reduce((result, row) => {
+      const value = row[key] || 'Not recorded'
+      result[value] = (result[value] ?? 0) + 1
+      return result
+    }, {})).sort((a, b) => b[1] - a[1]),
+  )
+  const failedControls = {}
+  for (const row of devices) {
+    for (const control of String(row.failedChecks ?? '').split(';').map((value) => value.trim()).filter(Boolean)) {
+      failedControls[control] = (failedControls[control] ?? 0) + 1
+    }
+  }
+  const matchedToMorley = devices.filter((row) => row.morleyInventoryMatch === 'Matched').length
+  return {
+    summary: {
+      reportSite: 'West Country Schools Trust / Central',
+      associatedSite: 'Morley Meadow',
+      inventoryAvailable: false,
+      totalAgents: devices.length,
+      passingAgents: devices.filter((row) => row.overallStatus === 'Pass').length,
+      failingAgents: devices.filter((row) => row.overallStatus === 'Fail').length,
+      serialRecorded: devices.filter((row) => Boolean(row.serial)).length,
+      morleyInventoryRecords: morleyInventory.length,
+      morleyInventoryQuantity: morleyInventory.reduce((total, row) => total + numberOf(row.quantity), 0),
+      matchedToMorley,
+      unmatchedToMorley: devices.length - matchedToMorley,
+      deviceTypes: group('deviceType'),
+      failedControls: Object.fromEntries(Object.entries(failedControls).sort((a, b) => b[1] - a[1])),
+    },
+    devices,
+  }
+}
+
 function buildServerMatches(cyberSmartDevices, serverInventoryPayload) {
   const inventory = serverInventoryPayload.inventory.map((server) => ({
     ...server,
@@ -565,6 +636,10 @@ async function main() {
   const allocations = rowsFrom(workbook, 'Allocation by Site')
   const inventory = rowsFrom(workbook, 'Inventory Coverage')
   const cyberSmartDevices = rowsFrom(workbook, 'CyberSmart Devices')
+  const centralCyberSmartDevices = cyberSmartDevices.filter(
+    (device) => device.reportSite === 'West Country Schools Trust / Central',
+  )
+  const centralReport = buildCentralReport(centralCyberSmartDevices, inventory)
   const reconciliation = rowsFrom(workbook, 'Reconciliation')
   const methodology = rowsFrom(workbook, 'Methodology')
   const serverInventoryPayload = JSON.parse(fs.readFileSync(sourceServerInventory, 'utf8'))
@@ -588,9 +663,7 @@ async function main() {
   const reportSummary = {
     ...summaryFromPending(pendingStatus),
     schoolCyberSmartDevices: sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
-    centralCyberSmartDevices:
-      cyberSmartDevices.length -
-      sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
+    centralCyberSmartDevices: centralCyberSmartDevices.length,
     compatibleDevices: sites.reduce((sum, site) => sum + site.compatibleDevices, 0),
     serverInstalls: sites.reduce((sum, site) => sum + site.serverInstalls, 0),
     serialMatched: sites.reduce((sum, site) => sum + site.serialMatched, 0),
@@ -765,6 +838,7 @@ async function main() {
     methodology,
     serverSummary: servers.summary,
     serverSites: servers.siteSummary,
+    centralReport: centralReport.summary,
     clientCompute,
     taskProgramme: {
       owner: 'Mark Kent',
@@ -797,9 +871,11 @@ async function main() {
         unallocatedInventoryGap: site.unallocatedInventoryGap,
       })),
       serverSites: core.serverSites,
+      centralReport: core.centralReport,
     }),
     writeJson('inventory.json', inventory),
     writeJson('cyber-devices.json', cyberSmartDevices),
+    writeJson('central-devices.json', centralReport.devices),
     writeJson('installed-devices.json', installedDevices),
     writeJson('failing-devices.json', failingDevices),
     writeJson('remaining-devices.json', remainingDevices),

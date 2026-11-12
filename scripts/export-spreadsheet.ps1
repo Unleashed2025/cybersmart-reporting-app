@@ -6,13 +6,16 @@ $output = Join-Path $root 'public\downloads\WeST-CyberSmart-Assessment-and-Progr
 $projectOutput = Join-Path $root 'public\downloads\WeST-CyberSmart-Project-Delivery-Plan.xlsx'
 $corePath = Join-Path $root 'public\data\tracker.json'
 $remainingPath = Join-Path $root 'public\data\remaining-devices.json'
+$centralPath = Join-Path $root 'public\data\central-devices.json'
 
 if (-not (Test-Path -LiteralPath $source)) { throw "Source workbook not found: $source" }
 if (-not (Test-Path -LiteralPath $corePath)) { throw "Core data not found: $corePath" }
 if (-not (Test-Path -LiteralPath $remainingPath)) { throw "Remaining-device data not found: $remainingPath" }
+if (-not (Test-Path -LiteralPath $centralPath)) { throw "Central-device data not found: $centralPath" }
 
 $core = Get-Content -LiteralPath $corePath -Raw | ConvertFrom-Json
 $remaining = Get-Content -LiteralPath $remainingPath -Raw | ConvertFrom-Json
+$centralDevices = Get-Content -LiteralPath $centralPath -Raw | ConvertFrom-Json
 
 Add-Type -AssemblyName System.Drawing
 function Get-OleColour([string]$hex) {
@@ -274,6 +277,28 @@ foreach ($row in $remaining) {
   ))
 }
 
+$centralRows = New-Object System.Collections.ArrayList
+foreach ($row in $centralDevices) {
+  [void]$centralRows.Add(@(
+    $row.host,
+    $row.serial,
+    $row.deviceType,
+    $row.overallStatus,
+    $row.osName,
+    $row.osVersion,
+    $row.appVersion,
+    $row.failedChecks,
+    $row.failureReasons,
+    $row.lastCheckIn,
+    $row.morleyInventoryMatch,
+    $row.morleyMatchMethod,
+    $row.morleyInventoryCategory,
+    $row.morleyInventorySerial,
+    $row.morleyAssetTag,
+    $row.morleyInventoryModel
+  ))
+}
+
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
 $excel.DisplayAlerts = $false
@@ -301,6 +326,10 @@ try {
     'Classification','Site','Inventory category','Device type','Quantity','Serial','Asset tag','Operating system','Manufacturer','Model','Location','Evidence confidence','Allocation status','Explanation','Owner','Deadline','Status','Progress %','Latest update / evidence','Last updated'
   ) -Rows $uncertainRows.ToArray() -Widths @(30,31,25,20,11,18,16,24,18,22,20,34,28,55,20,14,16,12,42,16) -EditableColumns @(17,18,19,20) -TabColour $amber
   $uncertainSheet.Columns.Item(18).NumberFormat = '0"%"'
+
+  [void](New-TrackingSheet -Workbook $workbook -Name 'WeST Central Report' -Title 'West Country Schools Trust / Central CyberSmart Report' -Description "Associated with Morley Meadow. $($core.centralReport.totalAgents) CyberSmart agents were checked against $($core.centralReport.morleyInventoryRecords) Morley inventory records; $($core.centralReport.matchedToMorley) confirmed matches were found. No Central inventory denominator is available." -Headers @(
+    'Host','Serial','Device type','Compliance','Operating system','OS version','App version','Failed controls','Failure reason','Last check-in','Morley match','Morley match method','Morley inventory category','Morley serial','Morley asset tag','Morley model'
+  ) -Rows $centralRows.ToArray() -Widths @(25,18,16,14,22,14,16,28,24,24,14,34,25,18,16,28) -EditableColumns @() -TabColour $blue)
 
   $workbook.Save()
   $sheetCount = $workbook.Worksheets.Count
@@ -353,8 +382,12 @@ try {
     'Classification','Site','Inventory category','Device type','Quantity','Serial','Asset tag','Operating system','Manufacturer','Model','Location','Evidence confidence','Allocation status','Explanation','Owner','Deadline','Status','Progress %','Latest update / evidence','Last updated'
   ) -Rows $uncertainRows.ToArray() -Widths @(30,31,25,20,11,18,16,24,18,22,20,34,28,55,20,14,16,12,42,16) -EditableColumns @(17,18,19,20) -TabColour $amber)
 
+  [void](New-TrackingSheet -Workbook $projectWorkbook -Name 'WeST Central' -Title 'West Country Schools Trust / Central Delivery Evidence' -Description "Associated with Morley Meadow. $($core.centralReport.totalAgents) Central agents, $($core.centralReport.passingAgents) passing and $($core.centralReport.failingAgents) failing. $($core.centralReport.matchedToMorley) match Morley inventory; no Central inventory denominator is available." -Headers @(
+    'Host','Serial','Device type','Compliance','Operating system','OS version','App version','Failed controls','Failure reason','Last check-in','Morley match','Morley match method','Morley inventory category','Morley serial','Morley asset tag','Morley model'
+  ) -Rows $centralRows.ToArray() -Widths @(25,18,16,14,22,14,16,28,24,24,14,34,25,18,16,28) -EditableColumns @() -TabColour $blue)
+
   $usedSheetNames = @{}
-  foreach ($sheetName in @('Portfolio Overview','Task Register','Device Rollout','Completion Waves','Unallocated & Uncertain')) {
+  foreach ($sheetName in @('Portfolio Overview','Task Register','Device Rollout','Completion Waves','Unallocated & Uncertain','WeST Central')) {
     $usedSheetNames[$sheetName] = $true
   }
   foreach ($site in $core.sites) {
