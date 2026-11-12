@@ -61,9 +61,14 @@ function Header({ title, description }: { title: string; description: string }) 
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
-      <a className="primary" href={`${import.meta.env.BASE_URL}downloads/WeST-CyberSmart-Final-Validated-Assessment.xlsx`}>
-        <Download size={17} /> Download full workbook
-      </a>
+      <div className="download-actions">
+        <a className="primary" href={`${import.meta.env.BASE_URL}downloads/WeST-CyberSmart-Multisite-Programme.pptx`}>
+          <Download size={17} /> Multisite PowerPoint
+        </a>
+        <a className="secondary" href={`${import.meta.env.BASE_URL}downloads/WeST-CyberSmart-Final-Validated-Assessment.xlsx`}>
+          <Download size={17} /> Full workbook
+        </a>
+      </div>
     </div>
   )
 }

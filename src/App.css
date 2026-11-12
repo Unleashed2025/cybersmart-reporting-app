@@ -18,6 +18,7 @@
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 8px; padding: 11px 15px; font: inherit; font-weight: 700; text-decoration: none; cursor: pointer; white-space: nowrap; }
 .primary { background: #2878ff; color: white; }
 .secondary { background: #eef4ff; color: #1858b5; }
+.download-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 9px; }
 .section-title { margin: 26px 0 12px; color: #10233f; font-size: 17px; }
 .metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
 .metrics.compact { grid-template-columns: repeat(3, minmax(0, 240px)); }
@@ -77,7 +78,7 @@ details summary { color: #10233f; font-weight: 750; cursor: pointer; padding: 3p
   .content-shell { margin-left: 0; width: 100%; }.content { padding: 28px 18px 55px; }
   .mobile-header { height: 56px; padding: 0 18px; display: flex; align-items: center; gap: 14px; background: #10233f; color: white; }
   .mobile-header button { border: 0; background: transparent; color: white; padding: 0; }
-  .page-heading { flex-direction: column; }.metrics, .metrics.compact { grid-template-columns: repeat(2, 1fr); }
+  .page-heading { flex-direction: column; }.download-actions { justify-content: flex-start; }.metrics, .metrics.compact { grid-template-columns: repeat(2, 1fr); }
   .guide-grid { grid-template-columns: 1fr; }.flow { grid-template-columns: 1fr; }.flow svg { transform: rotate(90deg); margin: auto; }
 }
 @media (max-width: 520px) {
