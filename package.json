@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "data:build": "node scripts/export-data.mjs && node scripts/export-powerpoint.mjs",
+    "spreadsheet:build": "node scripts/export-data.mjs && powershell -NoProfile -ExecutionPolicy Bypass -File scripts/export-spreadsheet.ps1",
     "powerpoint:build": "node scripts/export-powerpoint.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

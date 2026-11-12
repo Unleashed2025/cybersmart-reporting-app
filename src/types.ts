@@ -36,6 +36,9 @@ export interface Site {
   serialMatched: number
   notSerialMatched: number
   remainingToInstall: number
+  knownRemaining: number
+  explicitUnmanagedRemaining: number
+  unallocatedInventoryGap: number
   passing: number
   failing: number
   passPercent: number

@@ -4,7 +4,9 @@ import PptxGenJS from 'pptxgenjs'
 
 const root = path.resolve(import.meta.dirname, '..')
 const core = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'core.json'), 'utf8'))
+const remainingDevices = JSON.parse(fs.readFileSync(path.join(root, 'public', 'data', 'remaining-devices.json'), 'utf8'))
 const output = path.join(root, 'public', 'downloads', 'WeST-CyberSmart-Multisite-Programme.pptx')
+const projectOutput = path.join(root, 'public', 'downloads', 'WeST-CyberSmart-Project-Delivery-Plan.pptx')
 
 const pptx = new PptxGenJS()
 pptx.layout = 'LAYOUT_WIDE'
@@ -141,7 +143,9 @@ function addBars(slide, items, { x, y, w, h, color = C.blue, valueColor = C.navy
 }
 
 function addTable(slide, headers, rows, { x = 0.55, y = 1.68, w = 12.2, h = 4.95, fontSize = 6.5 } = {}) {
-  const weights = headers.length === 10
+  const weights = headers.length === 11
+    ? [2.35, 1.45, 1, 0.85, 2.15, 0.8, 0.8, 0.8, 0.8, 0.7, 0.75]
+    : headers.length === 10
     ? [2.5, 1, 1, 1, 1, 1, 1, 0.65, 1.75, 1.2]
     : headers.length === 4
       ? [2.5, 1.45, 1.75, 0.65]
@@ -232,7 +236,7 @@ function shortSite(value) {
   addMetric(slide, 3.02, 1.75, 2.35, nf.format(s.compatibleDevices), 'COMPATIBLE CLIENT DEVICES', 'Coverage denominator', C.blue)
   addMetric(slide, 5.49, 1.75, 2.35, nf.format(s.schoolCyberSmartDevices), 'SCHOOL CYBERSMART DEVICES', 'Includes server agents', C.cyan)
   addMetric(slide, 7.96, 1.75, 2.35, nf.format(s.remainingToInstall), 'REMAINING CLIENT INSTALLS', 'Allocated by site and type', C.amber)
-  addMetric(slide, 10.43, 1.75, 2.35, nf.format(core.serverSummary.inventoryRecords), 'COMPATIBLE SERVERS & VMS', `${core.serverSummary.physicalServers} physical · ${core.serverSummary.virtualMachines} virtual`, C.purple)
+  addMetric(slide, 10.43, 1.75, 2.35, nf.format(core.serverSummary.inventoryRecords), 'TOTAL SERVERS & VMS', `${core.serverSummary.inventoryWithCyberSmart} confirmed installs · ${core.serverSummary.inventoryWithoutCyberSmart} remaining`, C.purple)
   addMetric(slide, 0.55, 3.15, 2.35, nf.format(s.csvPassing), 'PASSING DEVICES', 'All detailed checks pass', C.green)
   addMetric(slide, 3.02, 3.15, 2.35, nf.format(s.csvFailing), 'FAILING DEVICES', 'Detailed remediation evidence', C.red)
   addMetric(slide, 5.49, 3.15, 2.35, nf.format(s.serialMatched), 'SERIAL-MATCHED INSTALLS', 'Status-neutral exact matches', C.green)
@@ -246,6 +250,27 @@ function shortSite(value) {
   slide.addText('31 JAN 2027', { x: 6.05, y: 5.28, w: 2.1, h: 0.35, fontSize: 20, bold: true, color: C.blue, margin: 0 })
   slide.addText('All schools complete', { x: 9.15, y: 4.98, w: 1.8, h: 0.18, fontSize: 7, bold: true, color: C.muted, margin: 0 })
   slide.addText('31 JUL 2027', { x: 9.15, y: 5.28, w: 2.1, h: 0.35, fontSize: 20, bold: true, color: C.green, margin: 0 })
+}
+
+// Client coverage across sites
+{
+  const slide = nextSlide()
+  addHeader(slide, 'How to read this report', 'Five rules for interpreting the numbers', 'Use these definitions consistently across trust-wide, school, server and programme slides.')
+  const guide = [
+    ['1', 'Start with the denominator', 'Compatible client devices are the client coverage denominator. Servers and VMs always remain separate.'],
+    ['2', 'Read installation evidence', 'Serial matched is the strongest client evidence. Without serial match means an agent exists but needs reconciliation.'],
+    ['3', 'Understand remaining quantities', 'Remaining installs are compatible devices without a confirmed allocation and are split by school and device type.'],
+    ['4', 'Separate coverage from compliance', 'Installed does not mean passing. Pass and fail come from the exported CyberSmart control results.'],
+    ['5', 'Read tasks as delivery work', 'Task columns count actions, not devices. The completion measure gives quantity; owner, due date and progress drive delivery.'],
+  ]
+  guide.forEach(([number, title, body], index) => {
+    const y = 1.72 + index * 0.96
+    addCard(slide, 0.68, y, 11.98, 0.78, index === 4 ? C.pink : C.blue, C.white)
+    slide.addShape(pptx.ShapeType.ellipse, { x: 0.94, y: y + 0.16, w: 0.42, h: 0.42, fill: { color: index === 4 ? C.pink : C.blue }, line: { color: index === 4 ? C.pink : C.blue } })
+    slide.addText(number, { x: 1.04, y: y + 0.25, w: 0.22, h: 0.16, fontSize: 8, bold: true, color: C.white, align: 'center', margin: 0 })
+    slide.addText(title, { x: 1.58, y: y + 0.13, w: 2.45, h: 0.22, fontSize: 10, bold: true, color: C.navy, margin: 0 })
+    slide.addText(body, { x: 4.08, y: y + 0.13, w: 8.18, h: 0.42, fontSize: 8.5, color: C.muted, margin: 0, fit: 'shrink', valign: 'mid' })
+  })
 }
 
 // Client coverage across sites
@@ -284,18 +309,57 @@ for (const [part, sites] of [[1, core.sites.slice(0, 16)], [2, core.sites.slice(
 // Server coverage
 {
   const slide = nextSlide()
+  addHeader(slide, 'Inventory reconciliation', 'Unallocated and uncertain remaining inventory', 'The Excel tracker contains every relevant row. This slide shows the scale and representative examples without inventing asset identities.')
+  const explicitUnmanaged = core.sites.reduce((total, site) => total + site.explicitUnmanagedRemaining, 0)
+  const unallocatedGap = core.sites.reduce((total, site) => total + site.unallocatedInventoryGap, 0)
+  const totalsBased = remainingDevices
+    .filter((row) => String(row.evidenceConfidence).startsWith('Totals-based'))
+    .reduce((total, row) => total + Number(row.allocateQuantity || 0), 0)
+  addMetric(slide, 0.65, 1.72, 3.65, nf.format(explicitUnmanaged), 'EXPLICIT UNMANAGED / UNKNOWN', 'Source inventory labels these rows unmanaged or unknown', C.amber)
+  addMetric(slide, 4.52, 1.72, 3.65, nf.format(totalsBased), 'QUANTITY-ONLY EVIDENCE', 'No individual serial match is available', C.purple)
+  addMetric(slide, 8.39, 1.72, 3.65, nf.format(unallocatedGap), 'UNALLOCATED / UNCERTAIN GAP', 'Calculated shortfall with no item-level identity', C.red)
+
+  const gapExamples = remainingDevices.filter((row) => row.deviceCategory === 'Unallocated inventory gap').slice(0, 2)
+  const unmanagedExamples = remainingDevices.filter((row) => String(row.deviceCategory).toLowerCase().includes('unmanaged')).slice(0, 2)
+  const totalsExamples = remainingDevices.filter((row) => String(row.evidenceConfidence).startsWith('Totals-based')).slice(0, 2)
+  const exampleRows = [...gapExamples, ...unmanagedExamples, ...totalsExamples].map((row) => {
+    const classification = row.deviceCategory === 'Unallocated inventory gap'
+      ? 'Unallocated gap'
+      : String(row.deviceCategory).toLowerCase().includes('unmanaged')
+        ? 'Explicit unmanaged'
+        : 'Quantity-only'
+    const identifier = row.serial || row.assetTag || 'No item-level identifier'
+    const action = row.deviceCategory === 'Unallocated inventory gap'
+      ? 'Reconcile local inventory before allocation'
+      : row.allocationStatus
+    return [shortSite(row.schoolSite), classification, row.deviceCategory, row.allocateQuantity, identifier, action]
+  })
+  addSectionLabel(slide, 'Representative source / allocation rows', 0.65, 3.18, 8)
+  addTable(slide,
+    ['Site', 'Classification', 'Inventory category', 'Qty', 'Serial / asset evidence', 'Required action'],
+    exampleRows,
+    { x: 0.65, y: 3.45, w: 12.05, h: 2.75, fontSize: 6.2 },
+  )
+  slide.addText('Important: Ivybridge’s 438 is one aggregate gap row with blank serial, asset, model and location fields. It is not 438 blank spreadsheet rows and must not be presented as 438 known unmanaged devices.', {
+    x: 0.75, y: 6.35, w: 11.85, h: 0.3, fontSize: 7.5, bold: true, color: C.red, margin: 0, fit: 'shrink',
+  })
+}
+
+// Server coverage
+{
+  const slide = nextSlide()
   addHeader(slide, 'Server CyberSmart', 'Compatible server and VM coverage', 'A separate infrastructure report: server agents never reduce the client-compute installation gap.')
   const ss = core.serverSummary
-  addMetric(slide, 0.55, 1.72, 2.35, nf.format(ss.inventoryRecords), 'SERVER / VM INVENTORY', `${ss.physicalServers} physical · ${ss.virtualMachines} virtual`, C.purple)
-  addMetric(slide, 3.02, 1.72, 2.35, nf.format(ss.cyberSmartServerInstalls), 'CYBERSMART SERVER AGENTS', 'Detailed exported agents', C.cyan)
-  addMetric(slide, 5.49, 1.72, 2.35, nf.format(ss.matchedServers), 'MATCHED AGENTS', 'Serial or same-site hostname', C.green)
-  addMetric(slide, 7.96, 1.72, 2.35, nf.format(ss.unmatchedServers), 'UNMATCHED AGENTS', 'Infrastructure reconciliation needed', C.amber)
-  addMetric(slide, 10.43, 1.72, 2.35, nf.format(ss.inventoryWithoutCyberSmart), 'INVENTORY WITHOUT MATCH', 'Potential coverage work', C.red)
+  addMetric(slide, 0.55, 1.72, 2.35, nf.format(ss.inventoryRecords), 'TOTAL COMPATIBLE SERVERS & VMS', `${ss.physicalServers} physical · ${ss.virtualMachines} virtual`, C.purple)
+  addMetric(slide, 3.02, 1.72, 2.35, nf.format(ss.inventoryWithCyberSmart), 'CONFIRMED CYBERSMART INSTALLS', 'Unique matched infrastructure records', C.green)
+  addMetric(slide, 5.49, 1.72, 2.35, nf.format(ss.inventoryWithoutCyberSmart), 'REMAINING SERVER INSTALLS', 'No confirmed CyberSmart match', C.red)
+  addMetric(slide, 7.96, 1.72, 2.35, nf.format(ss.cyberSmartServerInstalls), 'RAW SERVER-LABELLED AGENTS', 'Reconciliation evidence only', C.amber)
+  addMetric(slide, 10.43, 1.72, 2.35, nf.format(ss.unmatchedServers), 'UNMATCHED AGENT RECORDS', 'Duplicates, stale or unmapped evidence', C.amber)
   const top = [...core.serverSites].sort((a, b) => b.compatibleServersAndVms - a.compatibleServersAndVms).slice(0, 12)
   addSectionLabel(slide, 'Largest server and VM estates', 0.65, 3.2)
   addBars(slide, top.map((site) => ({ label: shortSite(site.site), value: site.compatibleServersAndVms, color: C.purple })), { x: 0.65, y: 3.45, w: 6.0, h: 3.0, color: C.purple })
-  addSectionLabel(slide, 'CyberSmart server agents by site', 6.85, 3.2)
-  addBars(slide, [...core.serverSites].sort((a, b) => b.cyberSmartServerInstalls - a.cyberSmartServerInstalls).slice(0, 12).map((site) => ({ label: shortSite(site.site), value: site.cyberSmartServerInstalls, color: C.cyan })), { x: 6.85, y: 3.45, w: 5.85, h: 3.0, color: C.cyan })
+  addSectionLabel(slide, 'Confirmed server installs by site', 6.85, 3.2)
+  addBars(slide, [...core.serverSites].sort((a, b) => b.inventoryWithCyberSmart - a.inventoryWithCyberSmart).slice(0, 12).map((site) => ({ label: shortSite(site.site), value: site.inventoryWithCyberSmart, color: C.green })), { x: 6.85, y: 3.45, w: 5.85, h: 3.0, color: C.green })
 }
 
 // Programme ownership
@@ -346,9 +410,10 @@ const summaryRows = core.sites.map((site) => {
   const schedule = core.taskProgramme.schoolSchedule.find((item) => item.site === site.site)
   const tasks = core.taskProgramme.tasks.filter((task) => task.site === site.site)
   const installOwner = core.taskProgramme.rolloutOwners[site.site] ?? core.taskProgramme.owner
+  const clientInstalls = Math.max(0, site.cyberSmartDevices - site.serverInstalls)
   return [
-    shortSite(site.site), site.compatibleDevices, site.cyberSmartDevices, site.serialMatched,
-    site.remainingToInstall, server?.compatibleServersAndVms ?? 0, server?.cyberSmartServerInstalls ?? 0,
+    shortSite(site.site), site.compatibleDevices, clientInstalls, site.serialMatched,
+    site.remainingToInstall, server?.compatibleServersAndVms ?? 0, `${server?.inventoryWithCyberSmart ?? 0} / ${server?.inventoryWithoutCyberSmart ?? 0}`,
     tasks.length, installOwner, dateLabel(schedule?.dueDate),
   ]
 })
@@ -356,7 +421,7 @@ for (let index = 0; index < summaryRows.length; index += 11) {
   const slide = nextSlide()
   addHeader(slide, 'Multisite management view', `All-school coverage, tasks and ownership · ${Math.floor(index / 11) + 1} of ${Math.ceil(summaryRows.length / 11)}`, 'Client and server coverage, remaining tasks, local installation ownership and completion dates.')
   addTable(slide,
-    ['School', 'Compatible\nclients', 'CyberSmart\ninstalls', 'Serial\nmatched', 'Remaining\nclients', 'Servers\n& VMs', 'Server\nagents', 'Tasks', 'Install owner', 'All tasks due'],
+    ['School', 'Compatible\nclients', 'CyberSmart client\ninstalls', 'Serial\nmatched', 'Remaining\nclients', 'Servers\n& VMs', 'Server installs\nconfirmed / remaining', 'Tasks', 'Install owner', 'All tasks due'],
     summaryRows.slice(index, index + 11),
     { y: 1.68, h: 4.95, fontSize: 6.2 },
   )
@@ -371,6 +436,7 @@ const taskMatrixRows = core.sites.map((site) => {
     core.taskProgramme.rolloutOwners[site.site] ?? core.taskProgramme.owner,
     dateLabel(schedule?.dueDate),
     site.remainingToInstall,
+    `${site.knownRemaining} known / ${site.explicitUnmanagedRemaining} unmanaged / ${site.unallocatedInventoryGap} uncertain`,
     tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).length,
     tasks.filter((task) => task.category === 'Compliance remediation').length,
     tasks.filter((task) => task.category === 'Inventory reconciliation').length,
@@ -381,9 +447,9 @@ const taskMatrixRows = core.sites.map((site) => {
 })
 for (let index = 0; index < taskMatrixRows.length; index += 11) {
   const slide = nextSlide()
-  addHeader(slide, 'Delivery management', `School task types, owners and deadlines · ${Math.floor(index / 11) + 1} of ${Math.ceil(taskMatrixRows.length / 11)}`, 'Installation work is split by device type; compliance, inventory, server and MFA tasks are shown separately.')
+  addHeader(slide, 'Delivery management', `School task types, owners and deadlines · ${Math.floor(index / 11) + 1} of ${Math.ceil(taskMatrixRows.length / 11)}`, 'Remaining devices is a device quantity; the task columns count actions. Install owner applies to rollout tasks, while the deadline covers the full school work package.')
   addTable(slide,
-    ['School', 'Install owner', 'Deadline', 'Remaining\ndevices', 'Device-type\ninstall tasks', 'Compliance', 'Inventory', 'Server', 'MFA', 'Total\ntasks'],
+    ['School', 'Install owner', 'Deadline', 'Remaining\ndevices', 'Remaining breakdown\nknown / unmanaged / uncertain', 'Install\ntasks', 'Compliance', 'Inventory', 'Server', 'MFA', 'Total\ntasks'],
     taskMatrixRows.slice(index, index + 11),
     { y: 1.68, h: 4.95, fontSize: 6.2 },
   )
@@ -396,13 +462,15 @@ for (const site of core.sites) {
   const schedule = core.taskProgramme.schoolSchedule.find((item) => item.site === site.site)
   const tasks = core.taskProgramme.tasks.filter((task) => task.site === site.site)
   const installOwner = core.taskProgramme.rolloutOwners[site.site] ?? core.taskProgramme.owner
+  const clientInstalls = Math.max(0, site.cyberSmartDevices - site.serverInstalls)
+  const unmatchedClients = Math.max(0, site.notSerialMatched - site.serverInstalls)
   addHeader(slide, 'School delivery plan', site.site, `${tasks.length} tasks · programme owner ${core.taskProgramme.owner} · remaining-install owner ${installOwner} · all tasks due ${dateLabel(schedule?.dueDate)}`, site.site)
   addMetric(slide, 0.55, 1.65, 1.9, nf.format(site.compatibleDevices), 'COMPATIBLE CLIENTS', 'Authoritative denominator', C.blue)
-  addMetric(slide, 2.58, 1.65, 1.9, nf.format(site.cyberSmartDevices), 'CYBERSMART DEVICES', `${site.serialMatched} serial matched`, C.cyan)
-  addMetric(slide, 4.61, 1.65, 1.9, nf.format(site.remainingToInstall), 'REMAINING INSTALLS', `${site.notSerialMatched} unmatched installs`, C.amber)
+  addMetric(slide, 2.58, 1.65, 1.9, nf.format(clientInstalls), 'CYBERSMART CLIENT INSTALLS', `${site.serialMatched} serial matched`, C.cyan)
+  addMetric(slide, 4.61, 1.65, 1.9, nf.format(site.remainingToInstall), 'REMAINING INSTALLS', `${unmatchedClients} client installs unmatched`, C.amber)
   addMetric(slide, 6.64, 1.65, 1.9, nf.format(site.failing), 'FAILING DEVICES', `${site.passing} passing`, C.red)
-  addMetric(slide, 8.67, 1.65, 1.9, nf.format(server?.compatibleServersAndVms ?? 0), 'SERVERS & VMS', `${server?.physicalServers ?? 0} physical · ${server?.virtualMachines ?? 0} virtual`, C.purple)
-  addMetric(slide, 10.7, 1.65, 1.9, nf.format(server?.cyberSmartServerInstalls ?? 0), 'SERVER AGENTS', `${server?.failingInstalls ?? 0} failing`, C.purple)
+  addMetric(slide, 8.67, 1.65, 1.9, nf.format(server?.compatibleServersAndVms ?? 0), 'TOTAL SERVERS & VMS', `${server?.physicalServers ?? 0} physical · ${server?.virtualMachines ?? 0} virtual`, C.purple)
+  addMetric(slide, 10.7, 1.65, 1.9, nf.format(server?.inventoryWithCyberSmart ?? 0), 'CONFIRMED SERVER INSTALLS', `${server?.inventoryWithoutCyberSmart ?? 0} remaining · ${server?.cyberSmartServerInstalls ?? 0} raw agents`, C.green)
   addSectionLabel(slide, 'Remaining client installs by device type', 0.6, 3.08)
   const labels = { Windows: 'Windows', Chromebook: 'Chromebook', AppleMac: 'Apple / Mac', IPadIOs: 'iPad / iOS', AndroidTablet: 'Android / tablet', PossibleTypeUnknown: 'Unknown / unmanaged' }
   addBars(slide, Object.entries(site.remainingByType).filter(([, value]) => value > 0).map(([type, value]) => ({ label: labels[type] ?? type, value, color: type === 'PossibleTypeUnknown' ? C.amber : C.blue })), { x: 0.65, y: 3.35, w: 4.6, h: 2.7, maxItems: 7 })
@@ -435,4 +503,10 @@ for (const site of core.sites) {
 
 fs.mkdirSync(path.dirname(output), { recursive: true })
 await pptx.writeFile({ fileName: output, compression: true })
-console.log(JSON.stringify({ output, slides: page, bytes: fs.statSync(output).size }, null, 2))
+fs.copyFileSync(output, projectOutput)
+console.log(JSON.stringify({
+  output,
+  projectOutput,
+  slides: page,
+  bytes: fs.statSync(output).size,
+}, null, 2))
