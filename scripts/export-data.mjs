@@ -305,6 +305,159 @@ async function main() {
       }, {}),
     ),
   }
+  const reportSummary = {
+    ...summaryFromPending(pendingStatus),
+    schoolCyberSmartDevices: sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
+    centralCyberSmartDevices:
+      cyberSmartDevices.length -
+      sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
+    compatibleDevices: sites.reduce((sum, site) => sum + site.compatibleDevices, 0),
+    serverInstalls: sites.reduce((sum, site) => sum + site.serverInstalls, 0),
+    serialMatched: sites.reduce((sum, site) => sum + site.serialMatched, 0),
+    notSerialMatched: sites.reduce((sum, site) => sum + site.notSerialMatched, 0),
+    remainingToInstall: sites.reduce((sum, site) => sum + site.remainingToInstall, 0),
+  }
+  const schoolDueDates = [
+    '2027-01-31',
+    '2027-02-28',
+    '2027-03-31',
+    '2027-04-30',
+    '2027-05-31',
+    '2027-06-30',
+    '2027-07-31',
+  ]
+  const sortedSites = [...sites].sort((a, b) => a.site.localeCompare(b.site))
+  const schoolSchedule = sortedSites.map((site, index) => ({
+    site: site.site,
+    dueDate: schoolDueDates[Math.min(6, Math.floor(index * 7 / sortedSites.length))],
+  }))
+  const dueBySite = Object.fromEntries(schoolSchedule.map((item) => [item.site, item.dueDate]))
+  const rolloutTypeLabels = {
+    Windows: 'Windows',
+    Chromebook: 'Chromebook',
+    AppleMac: 'Apple / Mac',
+    IPadIOs: 'iPad / iOS',
+    AndroidTablet: 'Android / tablet',
+    PossibleTypeUnknown: 'possible unknown / unmanaged',
+  }
+  const programmeTasks = [
+    {
+      scope: 'WeST Central',
+      site: 'WeST Central',
+      category: 'Central devices',
+      task: 'Reconcile and remediate all WeST Central CyberSmart devices',
+      measure: `${reportSummary.centralCyberSmartDevices} detailed central devices`,
+      owner: 'Mark Kent',
+      dueDate: '2026-12-01',
+      status: 'Not started',
+    },
+    {
+      scope: 'Trust-wide',
+      site: 'WeST Central',
+      category: 'Portal reconciliation',
+      task: 'Resolve CyberSmart devices pending without detailed export evidence',
+      measure: `${reportSummary.pending} pending devices`,
+      owner: 'Mark Kent',
+      dueDate: '2026-12-01',
+      status: 'Not started',
+    },
+    {
+      scope: 'Trust-wide',
+      site: 'WeST Central',
+      category: 'Portal reconciliation',
+      task: 'Reconcile portal Secure with all-exported-checks-pass reporting',
+      measure: `${reportSummary.portalSecure - reportSummary.csvPassing} device difference`,
+      owner: 'Mark Kent',
+      dueDate: '2026-12-01',
+      status: 'Not started',
+    },
+    {
+      scope: 'Trust-wide',
+      site: 'WeST Central',
+      category: 'BYOD',
+      task: 'Approve and publish a trust-wide BYOD policy',
+      measure: 'Policy approved and communicated',
+      owner: 'Mark Kent',
+      dueDate: '2026-12-01',
+      status: 'Not started',
+    },
+    {
+      scope: 'Trust-wide',
+      site: 'WeST Central',
+      category: 'BYOD',
+      task: 'Define and implement trust-wide BYOD technical controls',
+      measure: 'Controls implemented and evidenced',
+      owner: 'Mark Kent',
+      dueDate: '2026-12-01',
+      status: 'Not started',
+    },
+  ]
+  for (const site of sortedSites) {
+    const dueDate = dueBySite[site.site]
+    const serverSite = servers.siteSummary.find((item) => item.site === site.site)
+    for (const [deviceType, quantity] of Object.entries(site.remainingByType)) {
+      if (quantity <= 0) continue
+      const label = rolloutTypeLabels[deviceType] ?? deviceType
+      programmeTasks.push({
+        scope: 'School',
+        site: site.site,
+        category: `CyberSmart rollout - ${label}`,
+        task: deviceType === 'PossibleTypeUnknown'
+          ? 'Identify compatible devices and complete CyberSmart installation for possible unknown / unmanaged inventory'
+          : `Install CyberSmart on remaining ${label} compatible devices`,
+        measure: `${quantity} remaining ${label} devices`,
+        owner: 'Mark Kent',
+        dueDate,
+        status: 'Not started',
+      })
+    }
+    if (site.failing > 0) {
+      programmeTasks.push({
+        scope: 'School',
+        site: site.site,
+        category: 'Compliance remediation',
+        task: 'Remediate all CyberSmart failing client devices',
+        measure: `${site.failing} failing devices`,
+        owner: 'Mark Kent',
+        dueDate,
+        status: 'Not started',
+      })
+    }
+    if (site.notSerialMatched > 0) {
+      programmeTasks.push({
+        scope: 'School',
+        site: site.site,
+        category: 'Inventory reconciliation',
+        task: 'Reconcile CyberSmart installations not matched by serial',
+        measure: `${site.notSerialMatched} unmatched installations`,
+        owner: 'Mark Kent',
+        dueDate,
+        status: 'Not started',
+      })
+    }
+    if ((serverSite?.inventoryWithoutCyberSmart ?? 0) > 0 || (serverSite?.unmatchedInstalls ?? 0) > 0) {
+      programmeTasks.push({
+        scope: 'School',
+        site: site.site,
+        category: 'Server CyberSmart',
+        task: 'Reconcile server and VM CyberSmart coverage',
+        measure: `${serverSite?.inventoryWithoutCyberSmart ?? 0} infrastructure records without match; ${serverSite?.unmatchedInstalls ?? 0} unmatched agents`,
+        owner: 'Mark Kent',
+        dueDate,
+        status: 'Not started',
+      })
+    }
+    programmeTasks.push({
+      scope: 'School',
+      site: site.site,
+      category: 'MFA',
+      task: 'Implement and evidence MFA for the site',
+      measure: 'MFA implementation and evidence complete',
+      owner: 'Mark Kent',
+      dueDate,
+      status: 'Not started',
+    })
+  }
 
   const core = {
     generatedAt: new Date().toISOString(),
@@ -313,18 +466,7 @@ async function main() {
       notice:
         'Public full-detail report requested by the data owner. Contains device identifiers and security findings.',
     },
-    summary: {
-      ...summaryFromPending(pendingStatus),
-      schoolCyberSmartDevices: sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
-      centralCyberSmartDevices:
-        cyberSmartDevices.length -
-        sites.reduce((sum, site) => sum + site.cyberSmartDevices, 0),
-      compatibleDevices: sites.reduce((sum, site) => sum + site.compatibleDevices, 0),
-      serverInstalls: sites.reduce((sum, site) => sum + site.serverInstalls, 0),
-      serialMatched: sites.reduce((sum, site) => sum + site.serialMatched, 0),
-      notSerialMatched: sites.reduce((sum, site) => sum + site.notSerialMatched, 0),
-      remainingToInstall: sites.reduce((sum, site) => sum + site.remainingToInstall, 0),
-    },
+    summary: reportSummary,
     sites,
     checks,
     failureCauses,
@@ -334,6 +476,13 @@ async function main() {
     serverSummary: servers.summary,
     serverSites: servers.siteSummary,
     clientCompute,
+    taskProgramme: {
+      owner: 'Mark Kent',
+      centralDueDate: '2026-12-01',
+      schoolCompletionDeadline: '2027-07-31',
+      schoolSchedule,
+      tasks: programmeTasks,
+    },
   }
 
   fs.mkdirSync(outputDirectory, { recursive: true })

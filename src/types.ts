@@ -1,5 +1,6 @@
 export type Page =
   | 'overview'
+  | 'programme'
   | 'sites'
   | 'inventory'
   | 'installed'
@@ -78,6 +79,24 @@ export interface CoreData {
       byCategory: Record<string, number>
     }>
   }
+  taskProgramme: {
+    owner: string
+    centralDueDate: string
+    schoolCompletionDeadline: string
+    schoolSchedule: Array<{ site: string; dueDate: string }>
+    tasks: ProgrammeTask[]
+  }
+}
+
+export interface ProgrammeTask extends Record<string, unknown> {
+  scope: string
+  site: string
+  category: string
+  task: string
+  measure: string
+  owner: string
+  dueDate: string
+  status: string
 }
 
 export interface InventoryRow extends Record<string, unknown> {

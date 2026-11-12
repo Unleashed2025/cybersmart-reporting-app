@@ -11,11 +11,12 @@ import {
 import './App.css'
 import type {
   CheckRow, CoreData, FailingRow, InstalledRow, InventoryRow, Page, Remediation,
-  RemainingRow, ServerData, ServerInventory, ServerMatch, ServerSiteSummary,
+  ProgrammeTask, RemainingRow, ServerData, ServerInventory, ServerMatch, ServerSiteSummary,
 } from './types'
 
 const nav: Array<{ id: Page; label: string; icon: typeof CircleGauge }> = [
   { id: 'overview', label: 'Executive overview', icon: CircleGauge },
+  { id: 'programme', label: 'Remediation programme', icon: CheckCircle2 },
   { id: 'sites', label: 'Site explorer', icon: BarChart3 },
   { id: 'inventory', label: 'Compute inventory', icon: Laptop },
   { id: 'installed', label: 'CyberSmart installs', icon: MonitorCheck },
@@ -208,6 +209,16 @@ function Overview({ core, navigate }: { core: CoreData; navigate: (page: Page) =
           <button onClick={() => navigate('remaining')}><strong>{formatNumber.format(s.remainingToInstall)}</strong><span>Remaining allocation</span></button>
         </div>
       </section>
+      <section className="panel">
+        <h2>Remediation programme</h2>
+        <p>All tasks are assigned to {core.taskProgramme.owner}. WeST Central is due 1 December 2026; school completion waves run through 31 July 2027.</p>
+        <div className="flow">
+          <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.taskProgramme.tasks.length)}</strong><span>Total programme tasks</span></button><ChevronRight />
+          <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.taskProgramme.tasks.filter((task) => task.site === 'WeST Central').length)}</strong><span>Central and trust-wide tasks</span></button><ChevronRight />
+          <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.sites.length)}</strong><span>School completion plans</span></button><ChevronRight />
+          <button onClick={() => navigate('programme')}><strong>31 Jul 2027</strong><span>Final completion deadline</span></button>
+        </div>
+      </section>
       <div className="two-column">
         <section className="panel">
           <h2>Largest compatible client estates</h2><p>Installed client agents, remaining allocation and separately reported server agents.</p>
@@ -369,7 +380,7 @@ type AssignedFailure = FailingRow & {
   owner: string; priority: string; remediationStatus: string; dueDate: string; notes: string
 }
 
-function Failures({ rows }: { rows: FailingRow[] }) {
+function Failures({ rows, core }: { rows: FailingRow[]; core: CoreData }) {
   const storageKey = 'cybersmart-remediation-v1'
   const [remediation, setRemediation] = useState<Record<string, Remediation>>(() => {
     try { return JSON.parse(localStorage.getItem(storageKey) ?? '{}') as Record<string, Remediation> } catch { return {} }
@@ -382,7 +393,8 @@ function Failures({ rows }: { rows: FailingRow[] }) {
   }
   const assigned: AssignedFailure[] = rows.map((row) => {
     const item = remediation[row.cyberSmartDeviceId]
-    return { ...row, owner: item?.owner ?? '', priority: item?.priority ?? 'Medium', remediationStatus: item?.status ?? 'Not started', dueDate: item?.dueDate ?? '', notes: item?.notes ?? '' }
+    const scheduledDueDate = core.taskProgramme.schoolSchedule.find((schedule) => schedule.site === row.schoolSite)?.dueDate ?? core.taskProgramme.centralDueDate
+    return { ...row, owner: item?.owner || core.taskProgramme.owner, priority: item?.priority ?? 'Medium', remediationStatus: item?.status ?? 'Not started', dueDate: item?.dueDate || scheduledDueDate, notes: item?.notes ?? '' }
   })
   return (
     <BrowserPage
@@ -404,6 +416,42 @@ function Failures({ rows }: { rows: FailingRow[] }) {
         { key: 'notes', label: 'Notes', render: (row) => <input className="cell-input notes" value={row.notes} onChange={(event) => update(row.cyberSmartDeviceId, 'notes', event.target.value)} placeholder="Local notes" /> },
       ]}
     />
+  )
+}
+
+function Programme({ core }: { core: CoreData }) {
+  const tasks = core.taskProgramme.tasks
+  const central = tasks.filter((task) => task.site === 'WeST Central')
+  const mfa = tasks.filter((task) => task.category === 'MFA')
+  const byod = tasks.filter((task) => task.category === 'BYOD')
+  return (
+    <>
+      <Header title="Remediation programme" description="A single owner and deadline-led delivery plan for Central, all schools, CyberSmart remediation, server coverage, MFA and BYOD." />
+      <div className="metrics">
+        <Metric label="Programme owner" value={core.taskProgramme.owner} />
+        <Metric label="Total tasks" value={tasks.length} />
+        <Metric label="Central / trust-wide tasks" value={central.length} note="Due 1 December 2026" tone="purple" />
+        <Metric label="School tasks" value={tasks.length - central.length} note="Monthly waves January–July 2027" />
+        <Metric label="MFA site tasks" value={mfa.length} note="One for every school" tone="amber" />
+        <Metric label="Trust-wide BYOD tasks" value={byod.length} note="Policy and technical controls" tone="amber" />
+      </div>
+      <h2 className="section-title">School completion schedule</h2>
+      <section className="panel">
+        <DataTable rows={core.taskProgramme.schoolSchedule.map((item) => ({
+          ...item,
+          owner: core.taskProgramme.owner,
+          taskCount: tasks.filter((task) => task.site === item.site).length,
+        }))} columns={[
+          { key: 'site', label: 'School' }, { key: 'owner', label: 'Owner' }, { key: 'dueDate', label: 'All tasks due' }, { key: 'taskCount', label: 'Tasks' },
+        ]} />
+      </section>
+      <h2 className="section-title">All programme tasks</h2>
+      <FilteredTable<ProgrammeTask> rows={tasks} siteKey="site" typeKey="category" filename="cybersmart-remediation-programme.csv" columns={[
+        { key: 'scope', label: 'Scope' }, { key: 'site', label: 'Site' }, { key: 'category', label: 'Category' },
+        { key: 'task', label: 'Task' }, { key: 'measure', label: 'Completion measure' }, { key: 'owner', label: 'Owner' },
+        { key: 'dueDate', label: 'Due date' }, { key: 'status', label: 'Status', render: (row) => <Badge value={row.status} /> },
+      ]} />
+    </>
   )
 }
 
@@ -508,6 +556,7 @@ function App() {
 
   let content: ReactNode
   if (page === 'overview') content = <Overview core={core.data} navigate={navigate} />
+  else if (page === 'programme') content = <Programme core={core.data} />
   else if (page === 'sites') content = <SiteExplorer core={core.data} installed={installed.data} failing={failing.data} remaining={remaining.data} servers={servers.data} />
   else if (page === 'inventory') content = inventory.data ? <BrowserPage title="Authoritative compute inventory" description="Every client-compute record that forms the site denominator, including serialised and quantity-only evidence." rows={inventory.data} siteKey="school" typeKey="compatibleType" filename="compatible-compute-inventory.csv" columns={[
     { key: 'school', label: 'Site' }, { key: 'deviceCategory', label: 'Inventory category' }, { key: 'compatibleType', label: 'Compatible type' },
@@ -520,7 +569,7 @@ function App() {
     { key: 'serial', label: 'Serial' }, { key: 'deviceType', label: 'Type' }, { key: 'overallStatus', label: 'Compliance', render: (row) => <Badge value={row.overallStatus} /> },
     { key: 'os', label: 'Operating system' }, { key: 'matchMethod', label: 'Inventory match' }, { key: 'failedChecks', label: 'Failed controls' },
   ]} /> : <Loader error={installed.error} />
-  else if (page === 'failures') content = failing.data ? <Failures rows={failing.data} /> : <Loader error={failing.error} />
+  else if (page === 'failures') content = failing.data ? <Failures rows={failing.data} core={core.data} /> : <Loader error={failing.error} />
   else if (page === 'remaining') content = remaining.data ? <BrowserPage title="Remaining installation allocation" description="Provisional inventory-first list of client devices still requiring CyberSmart. Quantity-only records must be identified locally." rows={remaining.data} siteKey="schoolSite" typeKey="deviceType" filename="remaining-cybersmart-installations.csv" columns={[
     { key: 'schoolSite', label: 'Site' }, { key: 'deviceCategory', label: 'Inventory category' }, { key: 'deviceType', label: 'Type' },
     { key: 'allocateQuantity', label: 'Allocate' }, { key: 'serial', label: 'Serial' }, { key: 'assetTag', label: 'Asset tag' },
