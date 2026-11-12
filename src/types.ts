@@ -81,6 +81,7 @@ export interface CoreData {
   }
   taskProgramme: {
     owner: string
+    rolloutOwners: Record<string, string>
     centralDueDate: string
     schoolCompletionDeadline: string
     schoolSchedule: Array<{ site: string; dueDate: string }>

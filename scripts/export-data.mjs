@@ -340,6 +340,16 @@ async function main() {
     AndroidTablet: 'Android / tablet',
     PossibleTypeUnknown: 'possible unknown / unmanaged',
   }
+  const rolloutOwners = {
+    'South Dartmoor Community College for WeST': 'Richard Penhale',
+    'Callington Community College for WeST': 'David Mahoney',
+    "Sir James Smith's School for WeST": 'David Mahoney',
+    'Plymstock School for WeST': 'David Wainwright',
+    'Coombe Dean School for WeST': 'David Wainwright',
+    'Ivybridge Community College for WeST': 'Christian Rowlands',
+    'Eggbuckland Community College': 'Adam Hedley',
+    "Hele's School for WeST": 'David Lyns',
+  }
   const programmeTasks = [
     {
       scope: 'WeST Central',
@@ -406,7 +416,7 @@ async function main() {
           ? 'Identify compatible devices and complete CyberSmart installation for possible unknown / unmanaged inventory'
           : `Install CyberSmart on remaining ${label} compatible devices`,
         measure: `${quantity} remaining ${label} devices`,
-        owner: 'Mark Kent',
+        owner: rolloutOwners[site.site] ?? 'Mark Kent',
         dueDate,
         status: 'Not started',
       })
@@ -478,6 +488,7 @@ async function main() {
     clientCompute,
     taskProgramme: {
       owner: 'Mark Kent',
+      rolloutOwners,
       centralDueDate: '2026-12-01',
       schoolCompletionDeadline: '2027-07-31',
       schoolSchedule,

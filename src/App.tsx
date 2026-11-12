@@ -211,7 +211,7 @@ function Overview({ core, navigate }: { core: CoreData; navigate: (page: Page) =
       </section>
       <section className="panel">
         <h2>Remediation programme</h2>
-        <p>All tasks are assigned to {core.taskProgramme.owner}. WeST Central is due 1 December 2026; school completion waves run through 31 July 2027.</p>
+        <p>{core.taskProgramme.owner} is the programme owner. Named local owners are assigned to remaining compatible-device installations at designated secondary schools. WeST Central is due 1 December 2026; school waves run through 31 July 2027.</p>
         <div className="flow">
           <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.taskProgramme.tasks.length)}</strong><span>Total programme tasks</span></button><ChevronRight />
           <button onClick={() => navigate('programme')}><strong>{formatNumber.format(core.taskProgramme.tasks.filter((task) => task.site === 'WeST Central').length)}</strong><span>Central and trust-wide tasks</span></button><ChevronRight />
@@ -429,6 +429,7 @@ function Programme({ core }: { core: CoreData }) {
       <Header title="Remediation programme" description="A single owner and deadline-led delivery plan for Central, all schools, CyberSmart remediation, server coverage, MFA and BYOD." />
       <div className="metrics">
         <Metric label="Programme owner" value={core.taskProgramme.owner} />
+        <Metric label="Installation task owners" value={new Set(tasks.filter((task) => task.category.startsWith('CyberSmart rollout')).map((task) => task.owner)).size} note="Mark Kent plus named local owners" />
         <Metric label="Total tasks" value={tasks.length} />
         <Metric label="Central / trust-wide tasks" value={central.length} note="Due 1 December 2026" tone="purple" />
         <Metric label="School tasks" value={tasks.length - central.length} note="Monthly waves January–July 2027" />
@@ -439,10 +440,11 @@ function Programme({ core }: { core: CoreData }) {
       <section className="panel">
         <DataTable rows={core.taskProgramme.schoolSchedule.map((item) => ({
           ...item,
-          owner: core.taskProgramme.owner,
+          programmeOwner: core.taskProgramme.owner,
+          installOwner: core.taskProgramme.rolloutOwners[item.site] ?? core.taskProgramme.owner,
           taskCount: tasks.filter((task) => task.site === item.site).length,
         }))} columns={[
-          { key: 'site', label: 'School' }, { key: 'owner', label: 'Owner' }, { key: 'dueDate', label: 'All tasks due' }, { key: 'taskCount', label: 'Tasks' },
+          { key: 'site', label: 'School' }, { key: 'programmeOwner', label: 'Programme owner' }, { key: 'installOwner', label: 'Remaining-install owner' }, { key: 'dueDate', label: 'All tasks due' }, { key: 'taskCount', label: 'Tasks' },
         ]} />
       </section>
       <h2 className="section-title">All programme tasks</h2>
